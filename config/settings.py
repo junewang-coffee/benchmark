@@ -1,14 +1,22 @@
-# settings.py
+"""
+Django settings for the benchmark project.
+
+This module contains the settings for the Django project, including
+installed apps, middleware, database configuration, and static files.
+"""
 
 import os
 from pathlib import Path
 
 from dotenv import load_dotenv
 
+# Load environment variables from .env file
 load_dotenv()
 
+# Security settings
 SECRET_KEY = os.getenv("SECRET_KEY")
 
+# Installed applications
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -16,15 +24,15 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'django_extensions',
-    'app',
-
+    'django_extensions',  # Optional: For additional management commands
+    'app',  # Custom application
 ]
 
+# Template settings
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],  # 你可以加自訂 templates 路徑
+        'DIRS': [Path(__file__).resolve().parent.parent / "templates"],  # Custom templates directory
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -37,6 +45,7 @@ TEMPLATES = [
     },
 ]
 
+# Middleware settings
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -47,12 +56,10 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-
+# Base directory of the project
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
-# 只顯示與資料庫相關部分，使用 SQLite 預設即可
-
+# Database configuration
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -60,13 +67,19 @@ DATABASES = {
     }
 }
 
+# Debug settings
 DEBUG = True
+
+# Allowed hosts
 ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
 
-
+# Static files configuration
 STATIC_URL = '/static/'
-STATICFILES_DIRS = [BASE_DIR / "static"]  # 你可以加自訂 static 路徑
-STATIC_ROOT = BASE_DIR / "staticfiles"  # 用於收集靜態檔案的路徑
+STATICFILES_DIRS = [BASE_DIR / "static"]  # Custom static files directory
+STATIC_ROOT = BASE_DIR / "staticfiles"  # Directory for collected static files
+
+# Root URL configuration
 ROOT_URLCONF = "config.urls"
+
+# Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-TEMPLATES[0]['DIRS'] = [BASE_DIR / "templates"]

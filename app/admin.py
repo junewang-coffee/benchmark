@@ -10,7 +10,7 @@ from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils.html import format_html
 
-from app.models import Evaluation, StandardAnswer, TestPaperQuestion, UploadedEvaluationBatch, UploadedTestPaper
+from app.models import Evaluation, ExamPaperQuestion, StandardAnswer, UploadedEvaluationBatch, UploadedTestPaper
 from app.openai_eval import score_response
 
 # Utility Functions
@@ -70,13 +70,13 @@ def download_test_paper(request: HttpRequest, paper_id:str):
 
 
 # Admin Classes
-class TestPaperQuestionInline(admin.TabularInline):
+class ExamPaperQuestionInline(admin.TabularInline):
     """Inline admin interface for managing test paper questions.
 
     This class allows adding, editing, and viewing questions associated with a test paper
     directly within the admin interface for the test paper model.
     """
-    model = TestPaperQuestion
+    model = ExamPaperQuestion
     extra = 1
     readonly_fields = ("question_id", "question", "standard_answer", "difficulty", "source", "tags")
 
@@ -291,7 +291,7 @@ class UploadedTestPaperAdmin(admin.ModelAdmin):
     actions: ClassVar[list[str]] = ["download_selected_papers", "export_selected_papers_as_student_template"]
     from typing import ClassVar
 
-    inlines: ClassVar[list] = [TestPaperQuestionInline]
+    inlines: ClassVar[list] = [ExamPaperQuestionInline]
 
     @admin.action(description="Export selected papers as student JSON template")
     def export_selected_papers_as_student_template(self, request: HttpRequest, queryset: QuerySet):
@@ -349,7 +349,7 @@ class UploadedTestPaperAdmin(admin.ModelAdmin):
             reader = csv.DictReader(csv_file)
 
             for row in reader:
-                question, created = TestPaperQuestion.objects.update_or_create(
+                question, created = ExamPaperQuestion.objects.update_or_create(
                     test_paper=obj,
                     question_id=row["question_id"],
                     defaults={

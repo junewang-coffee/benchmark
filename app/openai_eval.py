@@ -1,4 +1,6 @@
 import json
+from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -7,20 +9,37 @@ load_dotenv()  # ✅ 載入 .env 檔案中的環境變數
 
 client = OpenAI()  # 自動讀取 OPENAI_API_KEY 環境變數
 
-def score_response(question: str, response: str, reference: str) -> dict:
+
+def score_response(question: str, response: str, reference: str) -> dict[str, Any]:
+    """Score a student's response based on predefined criteria.
+
+    Parameters
+    ----------
+    question : str
+        The question text.
+    response : str
+        The student's response.
+    reference : str
+        The reference answer.
+
+    Returns:
+    -------
+    Dict[str, Any]
+        A dictionary containing scores for various criteria and an overall comment.
+    """
     prompt = f"""
-你是一個教育評分專家，請針對學生的回答進行以下五個面向的評分：
-1. 準確度（accuracy）
-2. 相關性（relevance）
-3. 邏輯性（logic）
-4. 簡潔度（conciseness）
-5. 語言表現（language_quality）
+你是一個教育評分專家,請針對學生的回答進行以下五個面向的評分:
+1. 準確度 accuracy
+2. 相關 relevance
+3. 邏輯性 logic
+4. 簡潔度 conciseness
+5. 語言表現 language_quality
 
-題目：{question}
-標準答案：{reference}
-學生回答：{response}
+題目:{question}
+標準答案:{reference}
+學生回答:{response}
 
-請針對每一個項目以 1 到 5 分進行打分，並給出總分（total_score），以及綜合評價的簡要說明，輸出格式如下：
+請針對每一個項目以 1 到 5 分進行打分,並給出總分(total_score),以及綜合評價的簡要說明,輸出格式如下:
 {{
   "accuracy": x,
   "relevance": x,
@@ -58,8 +77,21 @@ def score_response(question: str, response: str, reference: str) -> dict:
             "raw_response": content
         }
 
-def evaluate_json_file(json_path: str) -> list:
-    with open(json_path, encoding='utf-8') as f:
+
+def evaluate_json_file(json_path: str) -> list[dict[str, Any]]:
+    """Evaluate responses from a JSON file.
+
+    Parameters
+    ----------
+    json_path : str
+        The path to the JSON file containing the data.
+
+    Returns:
+    -------
+    List[Dict[str, Any]]
+        A list of dictionaries containing evaluation results.
+    """
+    with Path(json_path).open(encoding="utf-8") as f:
         data = json.load(f)
 
     results = []
@@ -68,7 +100,7 @@ def evaluate_json_file(json_path: str) -> list:
         question = item.get("question")
         response = item.get("response")
 
-        # 自動萃取第一筆 source 作為標準答案（你也可以改用 AI 萃取）
+        # 自動萃取第一筆 source 作為標準答案（你也可以改用 AI 萃取）  # noqa: RUF003
         first_source = item.get("sources", [])
         reference = first_source[0]["content"] if first_source else ""
 
