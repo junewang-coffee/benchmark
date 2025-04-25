@@ -1,0 +1,7 @@
+Django>=4.2
+django-ninja>=0.21.0
+djangorestframework>=3.14.0
+python-dotenv>=1.0.0         # 若你想要透過 .env 管理環境變數
+ipython                      # 更好的互動式 shell
+django-extensions             # 提供額外的管理指令和功能
+openai>=0.27.0               # OpenAI API 客戶端
