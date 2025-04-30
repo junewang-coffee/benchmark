@@ -54,11 +54,11 @@ def save_evaluation(evaluation_data: dict):
 def download_exam_paper_question(request: HttpRequest):  # noqa: ARG001
     """Download a CSV template for exam paper questions."""
     response = HttpResponse(content_type="text/csv")
-    response["Content-Disposition"] = 'attachment; filename="testpaper_template.csv"'
+    response["Content-Disposition"] = 'attachment; filename="exam_paper_question_template.csv"'
 
     writer = csv.writer(response)
     writer.writerow(["question", "standard_answer", "difficulty", "source", "tags"])
-    writer.writerow(["What is the capital of France?", "Paris", 3, "Midterm A", "geography"])
+    writer.writerow(["What is the fcapital of France?", "Paris", 3, "Midterm A", "geography"])
     writer.writerow(["Who wrote Hamlet?", "William Shakespeare", 3, "Midterm A", "literature"])
     return response
 

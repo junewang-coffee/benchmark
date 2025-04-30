@@ -56,14 +56,15 @@ def test_uploaded_test_paper_creates_questions_and_scores(client):
     assert Evaluation.objects.filter(exp_id="test_paper").count() == 1
 
 
+
+
 @pytest.mark.django_db
 def test_exam_paper_question(client):
     """Test the ExamPaperQuestion view to ensure it returns a CSV response with the correct content."""
-    url = reverse("ExamPaperQuestion")
+    url = reverse("download_exam_paper_question")  # 使用正確的路由名稱
     response = client.get(url)
 
     assert response.status_code == 200
     assert response["Content-Type"] == "text/csv"
-    content = response.content.decode("utf-8")
-    assert "question" in content
-    assert "standard_answer" in content
+    assert "exam_paper_question_template.csv" in response["Content-Disposition"]
+    assert b"question,standard_answer,difficulty,source,tags" in response.content
