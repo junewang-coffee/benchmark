@@ -39,6 +39,7 @@ desktop.ini
 *.bak
 *.orig
 app/migrations/*
+uploads/*.json
 
 # Test and coverage reports
 htmlcov/

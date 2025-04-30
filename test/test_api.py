@@ -2,6 +2,15 @@ import json
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from app.models import Evaluation, StandardAnswer
+from django.test import Client
+
+
+@pytest.fixture
+def client():
+    """
+    Fixture to provide a single Django test client instance.
+    """
+    return Client()
 
 
 @pytest.mark.django_db

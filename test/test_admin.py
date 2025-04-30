@@ -9,6 +9,7 @@ from app.models import Evaluation, ExamPaperQuestion, UploadedEvaluationBatch, U
 
 @pytest.mark.django_db
 def test_uploaded_evaluation_batch_creates_evaluations(client):
+    """Test that uploading an evaluation batch creates corresponding evaluations in the database."""
     json_data = json.dumps([
         {
             "question_id": "q1",
@@ -56,8 +57,9 @@ def test_uploaded_test_paper_creates_questions_and_scores(client):
 
 
 @pytest.mark.django_db
-def test_download_csv_template(client):
-    url = reverse("download_csv_template")
+def test_exam_paper_question(client):
+    """Test the ExamPaperQuestion view to ensure it returns a CSV response with the correct content."""
+    url = reverse("ExamPaperQuestion")
     response = client.get(url)
 
     assert response.status_code == 200

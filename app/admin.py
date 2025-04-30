@@ -1,5 +1,6 @@
 import csv
 import json
+import uuid
 from io import TextIOWrapper
 
 from django.contrib import admin, messages
@@ -10,8 +11,22 @@ from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils.html import format_html
 
-from app.models import Evaluation, ExamPaperQuestion, StandardAnswer, UploadedEvaluationBatch, UploadedTestPaper
+from app.models import (
+    Evaluation,
+    ExamPaperQuestion,
+    StandardAnswer,
+    TestQuestion,
+    UploadedEvaluationBatch,
+    UploadedTestPaper,
+)
 from app.openai_eval import score_response
+
+
+def generate_unique_uuid_question_id():
+    while True:
+        question_id = uuid.uuid4().hex[:8]
+        if not TestQuestion.objects.filter(question_id=question_id).exists():
+            return question_id
 
 # Utility Functions
 
@@ -36,8 +51,8 @@ def save_evaluation(evaluation_data: dict):
     )
 
 
-def download_csv_template(request: HttpRequest):  # noqa: ARG001
-    """Download a CSV template for test papers."""
+def download_exam_paper_question(request: HttpRequest):  # noqa: ARG001
+    """Download a CSV template for exam paper questions."""
     response = HttpResponse(content_type="text/csv")
     response["Content-Disposition"] = 'attachment; filename="testpaper_template.csv"'
 
@@ -329,51 +344,44 @@ class UploadedTestPaperAdmin(admin.ModelAdmin):
         return response
 
     def save_model(self, request: HttpRequest, obj: UploadedTestPaper, form: ModelForm, change: bool):
-        """Save the UploadedTestPaper object and process its associated CSV file.
-
-        Parameters
-        ----------
-        request : HttpRequest
-            The HTTP request object.
-        obj : UploadedTestPaper
-            The UploadedTestPaper instance being saved.
-        form : ModelForm
-            The form used to save the instance.
-        change : bool
-            True if the instance is being changed, False if it's being created.
-        """
+        """Save the UploadedTestPaper object and process its associated CSV file."""
         super().save_model(request, obj, form, change)
 
         with obj.csv_file.open("rb") as file:
             csv_file = TextIOWrapper(file, encoding="utf-8")
             reader = csv.DictReader(csv_file)
 
-            for row in reader:
-                question, created = ExamPaperQuestion.objects.update_or_create(
+            for idx, row in enumerate(reader, start=1):
+                print(idx)
+                # 1. 自動產生 question_id
+                question_id = generate_unique_uuid_question_id()
+
+                # 2. 建立題目
+                ExamPaperQuestion.objects.create(
                     test_paper=obj,
-                    question_id=row["question_id"],
-                    defaults={
-                        "question": row["question"],
-                        "standard_answer": row["standard_answer"],
-                        "difficulty": int(row["difficulty"]),
-                        "source": row["source"],
-                        "tags": row["tags"],
-                    },
+                    question_id=question_id,
+                    question=row["question"],
+                    standard_answer=row["standard_answer"],
+                    difficulty=int(row["difficulty"]),
+                    source=row["source"],
+                    tags=row["tags"],
                 )
 
-                if created:
-                    response = ""
-                    reference = row["standard_answer"]
-                    scores = score_response(row["question"], response, reference)
-                    save_evaluation({
-                        "exp_id": obj.name,
-                        "test_paper_id": obj.id,
-                        "question_id": row["question_id"],
-                        "question": row["question"],
-                        "response": response,
-                        "reference": reference,
-                        "scores": scores,
-                    })
+                # 3. 空白回應自動評分
+                response = ""
+                reference = row["standard_answer"]
+                scores = score_response(row["question"], response, reference)
+
+                # 4. 儲存評估紀錄
+                save_evaluation({
+                    "exp_id": obj.name,
+                    "test_paper_id": obj.id,
+                    "question_id": question_id,
+                    "question": row["question"],
+                    "response": response,
+                    "reference": reference,
+                    "scores": scores,
+                })
 
     def download_button(self, obj: UploadedTestPaper):
         """Generate a download button for the test paper.
