@@ -63,7 +63,7 @@ def score_response(question: str, response: str, reference: str) -> dict[str, An
     # 解析回傳內容
     content = chat_response.choices[0].message.content
     try:
-        return json.loads(content)
+        content_load = json.loads(content)
     except Exception as e:
         return {
             "accuracy": 0,
@@ -76,7 +76,14 @@ def score_response(question: str, response: str, reference: str) -> dict[str, An
             "error": str(e),
             "raw_response": content
         }
-
+    content_load['total_score'] = sum([content_load["accuracy"],
+                                            content_load["relevance"],
+                                              content_load["logic"],
+                                                content_load["conciseness"],
+                                                  content_load["language_quality"]])
+    # content_load['total_score'] = round(content_load['total_score'] / 5, 2)  # 平均分數
+    content_load['total_score'] = content_load['total_score']
+    return content_load
 
 def evaluate_json_file(json_path: str) -> list[dict[str, Any]]:
     """Evaluate responses from a JSON file.

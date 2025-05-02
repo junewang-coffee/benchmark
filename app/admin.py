@@ -10,6 +10,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils.html import format_html
+from django.utils.safestring import mark_safe
 
 from app.models import (
     Evaluation,
@@ -237,6 +238,18 @@ class UploadedEvaluationBatchAdmin(admin.ModelAdmin):
     ensuring that duplicate experiment IDs are not allowed and evaluations are
     created based on the uploaded JSON data.
     """
+
+    change_form_template = "admin/uploaded_evaluation_batch_change_form.html"  # 自定義模板
+    list_display = ("name", "uploaded_at", "json_file_link")
+    readonly_fields = ("json_file_link",)
+
+    def json_file_link(self, obj):
+        """Provide a link to download the uploaded JSON file."""
+        if obj.json_file:
+            return mark_safe(f'<a href="{obj.json_file.url}" download>{obj.json_file.name}</a>')
+        return "-"
+    json_file_link.short_description = "Uploaded JSON File"
+
     def save_model(self, request: HttpRequest, obj: UploadedEvaluationBatch, form: ModelForm, change: bool):
         """Save the model instance and process related data.
 
