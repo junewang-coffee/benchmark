@@ -133,7 +133,7 @@ class EvaluationAdmin(admin.ModelAdmin):
     actions: ClassVar[list[str]] = ["export_selected_to_csv"]
 
     @admin.action(description="Export selected evaluations to CSV")
-    def export_selected_to_csv(self, queryset: QuerySet):
+    def export_selected_to_csv(self, request: HttpRequest, queryset: QuerySet):
         """Export the selected Evaluation objects to a CSV file.
 
         Parameters
@@ -277,7 +277,9 @@ class UploadedEvaluationBatchAdmin(admin.ModelAdmin):
         raw = obj.json_file.open("rb").read().decode("utf-8")
         data = json.loads(raw)
 
-        for item in data:
+
+        for idx, item in enumerate(data, start=1):
+            print(idx)
             question_id = item.get("question_id")
             question = item.get("question")
             response = item.get("response")
