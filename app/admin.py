@@ -3,6 +3,7 @@ import json
 import re
 import uuid
 from io import TextIOWrapper
+from typing import ClassVar
 
 from django.contrib import admin, messages
 from django.db import connection
@@ -259,102 +260,6 @@ class StandardAnswerAdmin(admin.ModelAdmin):
         _ = request
         return False
 
-@admin.register(UploadedEvaluationBatch)
-class UploadedEvaluationBatchAdmin(admin.ModelAdmin):
-    """Admin interface for managing uploaded evaluation batches.
-
-    This class provides functionality to save and process evaluation batches,
-    ensuring that duplicate experiment IDs are not allowed and evaluations are
-    created based on the uploaded JSON data.
-    """
-
-    change_form_template = "admin/uploaded_evaluation_batch_change_form.html"  # 自定義模板
-    list_display = ("name", "uploaded_at", "json_file_link")
-    readonly_fields = ("json_file_link",)
-
-    def json_file_link(self, obj):
-        """Provide a link to download the uploaded JSON file."""
-        if obj.json_file:
-            return mark_safe(f'<a href="{obj.json_file.url}" download>{obj.json_file.name}</a>')
-        return "-"
-    json_file_link.short_description = "Uploaded JSON File"
-
-    def save_model(self, request: HttpRequest, obj: UploadedEvaluationBatch, form: ModelForm, change: bool):
-        """Save the model instance and process related data.
-
-        Parameters
-        ----------
-        request : HttpRequest
-            The HTTP request object.
-        obj : UploadedEvaluationBatch
-            The model instance being saved.
-        form : ModelForm
-            The form used to save the instance.
-        change : bool
-            True if the instance is being changed, False if it's being created.
-        """
-        if Evaluation.objects.filter(exp_id=obj.name).exists():
-            self.message_user(
-                request,
-                f"Experiment ID '{obj.name}' already exists. Cannot add duplicate.",
-                level=messages.WARNING,
-            )
-            return
-
-        super().save_model(request, obj, form, change)
-
-        raw = obj.json_file.open("rb").read().decode("utf-8")
-        data = json.loads(raw)
-
-        for idx, item in enumerate(data, start=1):
-            print(f"Processing item {idx}...")  # noqa: T201
-
-            question_id = item.get("question_id")
-            question = item.get("question")
-            response = item.get("response")
-            question_source = item.get("sources", "")  # 獲取 source 資料
-            
-            # max_source = 2
-            # if len(question_source) > max_source:
-            #     str(question_source[:2])
-            # elif len(question_source) > 0 :
-            #     pass
-            # else:
-            #     question_source = ""
-
-            # 根據 question_id 從資料庫篩選出對應的 standard_answer
-            try:
-                exam_question = ExamPaperQuestion.objects.get(question_id=question_id)
-                standard_answer = exam_question.standard_answer
-            except ExamPaperQuestion.DoesNotExist:
-                self.message_user(
-                    request,
-                    f"Skipping item {idx}: Question ID '{question_id}' not found in ExamPaperQuestion.",
-                    level=messages.WARNING,
-                )
-                continue
-
-            if not all([question_id, question, response, standard_answer]):
-                self.message_user(
-                    request,
-                    f"Skipping item {idx}: Missing required fields.",
-                    level=messages.WARNING,
-                )
-                continue
-
-            # 使用 source 傳遞給 score_response
-            scores = score_response(question, response, standard_answer, question_source)
-
-            save_evaluation({
-                "exp_id": obj.name,
-                "test_paper_id": obj.id,
-                "question_id": question_id,
-                "question": question,
-                "response": response,
-                "standard_answer": standard_answer,
-                "question_source": "",
-                "scores": scores,
-            })
 # @admin.register(UploadedEvaluationBatch)
 # class UploadedEvaluationBatchAdmin(admin.ModelAdmin):
 #     """Admin interface for managing uploaded evaluation batches.
@@ -382,7 +287,7 @@ class UploadedEvaluationBatchAdmin(admin.ModelAdmin):
 #         ----------
 #         request : HttpRequest
 #             The HTTP request object.
-#         obj : UploadedTestPaper
+#         obj : UploadedEvaluationBatch
 #             The model instance being saved.
 #         form : ModelForm
 #             The form used to save the instance.
@@ -402,31 +307,169 @@ class UploadedEvaluationBatchAdmin(admin.ModelAdmin):
 #         raw = obj.json_file.open("rb").read().decode("utf-8")
 #         data = json.loads(raw)
 
-
 #         for idx, item in enumerate(data, start=1):
-#             print(idx)
+#             print(f"Processing item {idx}...")  # noqa: T201
+
 #             question_id = item.get("question_id")
 #             question = item.get("question")
 #             response = item.get("response")
-#             sources = item.get("sources", [])
-#             reference = sources[0]["content"] if sources else ""
+#             question_source = item.get("sources", "")  # 獲取 source 資料
+            
 
-#             if not all([question_id, question, response, reference, sources]):
+#             # 根據 question_id 從資料庫篩選出對應的 standard_answer
+#             try:
+#                 exam_question = ExamPaperQuestion.objects.get(question_id=question_id)
+#                 standard_answer = exam_question.standard_answer
+#             except ExamPaperQuestion.DoesNotExist:
+#                 self.message_user(
+#                     request,
+#                     f"Skipping item {idx}: Question ID '{question_id}' not found in ExamPaperQuestion.",
+#                     level=messages.WARNING,
+#                 )
 #                 continue
 
-#             scores = score_response(question, response, reference)
+#             if not all([question_id, question, response, standard_answer]):
+#                 self.message_user(
+#                     request,
+#                     f"Skipping item {idx}: Missing required fields.",
+#                     level=messages.WARNING,
+#                 )
+#                 continue
+
+#             # 使用 source 傳遞給 score_response
+#             scores = score_response(question, response, standard_answer, question_source)
+
 #             save_evaluation({
 #                 "exp_id": obj.name,
 #                 "test_paper_id": obj.id,
 #                 "question_id": question_id,
 #                 "question": question,
 #                 "response": response,
-#                 "reference": reference,
+#                 "standard_answer": standard_answer,
+#                 "question_source": "",
 #                 "scores": scores,
 #             })
 
+@admin.register(UploadedEvaluationBatch)
+class UploadedEvaluationBatchAdmin(admin.ModelAdmin):
+    """Admin interface for managing uploaded evaluation batches.
 
+    This class provides functionality to save and process evaluation batches,
+    ensuring that duplicate experiment IDs are not allowed and evaluations are
+    created based on the uploaded JSON or CSV data.
+    """
 
+    change_form_template = "admin/uploaded_evaluation_batch_change_form.html"  # 自定義模板
+    list_display = ("name", "uploaded_at", "json_file_link")
+    readonly_fields = ("json_file_link",)
+
+    def json_file_link(self, obj):
+        """Provide a link to download the uploaded file."""
+        if obj.json_file:
+            return mark_safe(f'<a href="{obj.json_file.url}" download>{obj.json_file.name}</a>')
+        return "-"
+    json_file_link.short_description = "Uploaded File"
+
+    def save_model(self, request: HttpRequest, obj: UploadedEvaluationBatch, form: ModelForm, change: bool):
+        """Save the model instance and process related data.
+
+        Parameters
+        ----------
+        request : HttpRequest
+            The HTTP request object.
+        obj : UploadedEvaluationBatch
+            The model instance being saved.
+        form : ModelForm
+            The form used to save the instance.
+        change : bool
+            True if the instance is being changed, False if it's being created.
+        """
+        if Evaluation.objects.filter(exp_id=obj.name).exists():
+            self.message_user(
+                request,
+                f"Experiment ID '{obj.name}' already exists. Cannot add duplicate.",
+                level=messages.WARNING,
+            )
+            return
+
+        super().save_model(request, obj, form, change)
+
+        # 打開文件並自動識別格式
+        raw = obj.json_file.open("rb").read().decode("utf-8")
+        if obj.json_file.name.endswith(".json"):
+            data = json.loads(raw)  # 處理 JSON 文件
+        elif obj.json_file.name.endswith(".csv"):
+            data = self.parse_csv(raw)  # 處理 CSV 文件
+        else:
+            self.message_user(
+                request,
+                "Unsupported file format. Please upload a JSON or CSV file.",
+                level=messages.ERROR,
+            )
+            return
+
+        # 處理數據
+        for idx, item in enumerate(data, start=1):
+            print(f"Processing item {idx}...")  # noqa: T201
+
+            question_id = item.get("question_id")
+            question = item.get("question")
+            response = item.get("response", "")
+            question_source = item.get("sources", "")  # 獲取 source 資料
+
+            # 根據 question_id 從資料庫篩選出對應的 standard_answer
+            try:
+                exam_question = ExamPaperQuestion.objects.get(question_id=question_id)
+                standard_answer = exam_question.standard_answer
+            except ExamPaperQuestion.DoesNotExist:
+                self.message_user(
+                    request,
+                    f"Skipping item {idx}: Question ID '{question_id}' not found in ExamPaperQuestion.",
+                    level=messages.WARNING,
+                )
+                continue
+
+            if not all([question_id, question, standard_answer]):
+                self.message_user(
+                    request,
+                    f"Skipping item {idx}: Missing required fields.",
+                    level=messages.WARNING,
+                )
+                continue
+
+            # 使用 source 傳遞給 score_response
+            scores = score_response(question, response, standard_answer, question_source)
+
+            save_evaluation({
+                "exp_id": obj.name,
+                "test_paper_id": obj.id,
+                "question_id": question_id,
+                "question": question,
+                "response": response,
+                "standard_answer": standard_answer,
+                "question_source": question_source,
+                "scores": scores,
+            })
+
+    def parse_csv(self, raw: str) -> list[dict]:
+        """Parse CSV content into a list of dictionaries.
+
+        Parameters
+        ----------
+        raw : str
+            The raw CSV content as a string.
+
+        Returns
+        -------
+        list[dict]
+            A list of dictionaries representing the CSV rows.
+        """
+        import csv
+        from io import StringIO
+
+        csv_data = StringIO(raw)
+        reader = csv.DictReader(csv_data)
+        return [row for row in reader]
 @admin.register(UploadedTestPaper)
 class UploadedTestPaperAdmin(admin.ModelAdmin):
     """Admin interface for managing UploadedTestPaper objects.
@@ -441,30 +484,28 @@ class UploadedTestPaperAdmin(admin.ModelAdmin):
 
     list_display = ("name", "uploaded_at", "download_button")
     search_fields = ("name",)
-    from typing import ClassVar
-
-    actions: ClassVar[list[str]] = ["download_selected_papers", "export_selected_papers_as_student_template"]
-    from typing import ClassVar
-
+    actions: ClassVar[list[str]] = ["download_selected_papers", "export_as_csv", "export_as_json"]
     inlines: ClassVar[list] = [ExamPaperQuestionInline]
 
-    @admin.action(description="Export selected papers as student JSON template")
-    def export_selected_papers_as_student_template(self, request: HttpRequest, queryset: QuerySet):
-        """Export selected test papers as a JSON template for students.
 
-        Parameters
-        ----------
-        request : HttpRequest
-            The HTTP request object.
-        queryset : QuerySet
-            The queryset of selected UploadedTestPaper objects.
+    @admin.action(description="Export student exam as CSV")
+    def export_as_csv(self, request: HttpRequest, queryset: QuerySet):
+        """Export selected Exam  papers as a CSV template."""
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = 'attachment; filename="student_test_paper_template.csv"'
 
-        Returns:
-        -------
-        HttpResponse
-            A JSON response containing the student test paper template.
-        """
-        _ = request  # Marking request as intentionally unused
+        writer = csv.writer(response)
+        writer.writerow(["question_id", "question", "response", "source"])  # CSV 標題
+        for paper in queryset:
+            for question in paper.questions.all():
+                writer.writerow([question.question_id, question.question, "", ""])
+
+        return response
+
+    @admin.action(description="Export student exam as JSON")
+    def export_as_json(self, request: HttpRequest, queryset: QuerySet):
+        """Export selected test papers as a JSON template."""
+        _  = request
         result = [
             {
                 "question_id": question.question_id,
@@ -481,6 +522,7 @@ class UploadedTestPaperAdmin(admin.ModelAdmin):
             content_type="application/json",
         )
         response["Content-Disposition"] = 'attachment; filename="student_test_paper_template.json"'
+
         return response
 
     def save_model(self, request: HttpRequest, obj: UploadedTestPaper, form: ModelForm, change: bool):
@@ -492,7 +534,6 @@ class UploadedTestPaperAdmin(admin.ModelAdmin):
             reader = csv.DictReader(csv_file)
 
             for idx, row in enumerate(reader, start=1):
-                print(idx)
                 # 1. 自動產生 question_id
                 question_id = generate_unique_uuid_question_id()
 
@@ -510,7 +551,6 @@ class UploadedTestPaperAdmin(admin.ModelAdmin):
                 # 3. 空白回應自動評分
                 response = ""
                 reference = row["standard_answer"]
-                # scores = score_response(row["question"], response, reference)
                 scores = ""
                 # 4. 儲存評估紀錄
                 save_evaluation({
@@ -541,7 +581,7 @@ class UploadedTestPaperAdmin(admin.ModelAdmin):
 
     download_button.short_description = "Download Test Paper"
 
-    @admin.action(description="Download selected test papers as CSV")
+    @admin.action(description="Download selected test papers")
     def download_selected_papers(self, _: HttpRequest, queryset: QuerySet):
         """Download the selected test papers as a CSV file.
 
