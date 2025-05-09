@@ -1,9 +1,11 @@
 import csv
 import json
+import re
 import uuid
 from io import TextIOWrapper
 
 from django.contrib import admin, messages
+from django.db import connection
 from django.db.models import QuerySet
 from django.forms import ModelForm
 from django.http import HttpRequest, HttpResponse
@@ -22,8 +24,10 @@ from app.models import (
 )
 from app.openai_eval import score_response
 
-import json
-import re
+
+def enable_wal():
+    with connection.cursor() as cursor:
+        cursor.execute("PRAGMA journal_mode=WAL;")
 
 def format_json_as_plain_text(json_data: list[dict]) -> str:
     r"""將 JSON 格式的 list of dict 轉換為以換行和縮排區分的純文本，並移除特殊符號。.
