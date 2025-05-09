@@ -113,7 +113,7 @@ class Evaluation(models.Model):
     question_id = models.CharField(max_length=10)
     test_question = models.TextField()
     bot_response = models.TextField()
-    question_source = models.CharField(max_length=255)
+    question_source = models.TextField()
     standard_answer = models.TextField()
     difficulty = models.IntegerField()
     accuracy = models.IntegerField()

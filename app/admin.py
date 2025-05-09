@@ -22,6 +22,32 @@ from app.models import (
 )
 from app.openai_eval import score_response
 
+import json
+import re
+
+def format_json_as_plain_text(json_data: list[dict]) -> str:
+    r"""將 JSON 格式的 list of dict 轉換為以換行和縮排區分的純文本，並移除特殊符號。.
+
+    Parameters
+    ----------
+    json_data : list[dict]
+        要格式化的 JSON 數據。
+
+    Returns:
+    -------
+    str
+        格式化後的純文本 移除了 \n、\s、\t 等符號。
+    """
+    # 將 JSON 格式化為帶縮排的字符串
+    try:
+        formatted_text = json.dumps(json_data, ensure_ascii=False, indent=4)
+        # 移除 \n、\s、\t 等特殊符號
+        cleaned_text = re.sub(r"[\n\t\r]", " ", formatted_text)
+        return re.sub(r"\s{2,}", " ", cleaned_text)  # 移除多餘的空格
+    except json.JSONDecodeError:
+        return "Invalid JSON data"
+    except:  # noqa: E722
+        return ""
 
 def generate_unique_uuid_question_id():
     while True:
@@ -39,8 +65,8 @@ def save_evaluation(evaluation_data: dict):
         question_id=evaluation_data["question_id"],
         test_question=evaluation_data["question"],
         bot_response=evaluation_data["response"],
-        question_source="",
-        standard_answer=evaluation_data["reference"],
+        question_source=evaluation_data["question_source"],
+        standard_answer=evaluation_data["standard_answer"],
         difficulty=3,
         accuracy=evaluation_data["scores"].get("accuracy"),
         relevance=evaluation_data["scores"].get("relevance"),
@@ -229,7 +255,6 @@ class StandardAnswerAdmin(admin.ModelAdmin):
         _ = request
         return False
 
-
 @admin.register(UploadedEvaluationBatch)
 class UploadedEvaluationBatchAdmin(admin.ModelAdmin):
     """Admin interface for managing uploaded evaluation batches.
@@ -257,7 +282,7 @@ class UploadedEvaluationBatchAdmin(admin.ModelAdmin):
         ----------
         request : HttpRequest
             The HTTP request object.
-        obj : UploadedTestPaper
+        obj : UploadedEvaluationBatch
             The model instance being saved.
         form : ModelForm
             The form used to save the instance.
@@ -277,28 +302,124 @@ class UploadedEvaluationBatchAdmin(admin.ModelAdmin):
         raw = obj.json_file.open("rb").read().decode("utf-8")
         data = json.loads(raw)
 
-
         for idx, item in enumerate(data, start=1):
-            print(idx)
+            print(f"Processing item {idx}...")  # noqa: T201
+
             question_id = item.get("question_id")
             question = item.get("question")
             response = item.get("response")
-            sources = item.get("sources", [])
-            reference = sources[0]["content"] if sources else ""
+            question_source = item.get("sources", "")  # 獲取 source 資料
+            
+            # max_source = 2
+            # if len(question_source) > max_source:
+            #     str(question_source[:2])
+            # elif len(question_source) > 0 :
+            #     pass
+            # else:
+            #     question_source = ""
 
-            if not all([question_id, question, response, reference]):
+            # 根據 question_id 從資料庫篩選出對應的 standard_answer
+            try:
+                exam_question = ExamPaperQuestion.objects.get(question_id=question_id)
+                standard_answer = exam_question.standard_answer
+            except ExamPaperQuestion.DoesNotExist:
+                self.message_user(
+                    request,
+                    f"Skipping item {idx}: Question ID '{question_id}' not found in ExamPaperQuestion.",
+                    level=messages.WARNING,
+                )
                 continue
 
-            scores = score_response(question, response, reference)
+            if not all([question_id, question, response, standard_answer]):
+                self.message_user(
+                    request,
+                    f"Skipping item {idx}: Missing required fields.",
+                    level=messages.WARNING,
+                )
+                continue
+
+            # 使用 source 傳遞給 score_response
+            scores = score_response(question, response, standard_answer, question_source)
+
             save_evaluation({
                 "exp_id": obj.name,
                 "test_paper_id": obj.id,
                 "question_id": question_id,
                 "question": question,
                 "response": response,
-                "reference": reference,
+                "standard_answer": standard_answer,
+                "question_source": "",
                 "scores": scores,
             })
+# @admin.register(UploadedEvaluationBatch)
+# class UploadedEvaluationBatchAdmin(admin.ModelAdmin):
+#     """Admin interface for managing uploaded evaluation batches.
+
+#     This class provides functionality to save and process evaluation batches,
+#     ensuring that duplicate experiment IDs are not allowed and evaluations are
+#     created based on the uploaded JSON data.
+#     """
+
+#     change_form_template = "admin/uploaded_evaluation_batch_change_form.html"  # 自定義模板
+#     list_display = ("name", "uploaded_at", "json_file_link")
+#     readonly_fields = ("json_file_link",)
+
+#     def json_file_link(self, obj):
+#         """Provide a link to download the uploaded JSON file."""
+#         if obj.json_file:
+#             return mark_safe(f'<a href="{obj.json_file.url}" download>{obj.json_file.name}</a>')
+#         return "-"
+#     json_file_link.short_description = "Uploaded JSON File"
+
+#     def save_model(self, request: HttpRequest, obj: UploadedEvaluationBatch, form: ModelForm, change: bool):
+#         """Save the model instance and process related data.
+
+#         Parameters
+#         ----------
+#         request : HttpRequest
+#             The HTTP request object.
+#         obj : UploadedTestPaper
+#             The model instance being saved.
+#         form : ModelForm
+#             The form used to save the instance.
+#         change : bool
+#             True if the instance is being changed, False if it's being created.
+#         """
+#         if Evaluation.objects.filter(exp_id=obj.name).exists():
+#             self.message_user(
+#                 request,
+#                 f"Experiment ID '{obj.name}' already exists. Cannot add duplicate.",
+#                 level=messages.WARNING,
+#             )
+#             return
+
+#         super().save_model(request, obj, form, change)
+
+#         raw = obj.json_file.open("rb").read().decode("utf-8")
+#         data = json.loads(raw)
+
+
+#         for idx, item in enumerate(data, start=1):
+#             print(idx)
+#             question_id = item.get("question_id")
+#             question = item.get("question")
+#             response = item.get("response")
+#             sources = item.get("sources", [])
+#             reference = sources[0]["content"] if sources else ""
+
+#             if not all([question_id, question, response, reference, sources]):
+#                 continue
+
+#             scores = score_response(question, response, reference)
+#             save_evaluation({
+#                 "exp_id": obj.name,
+#                 "test_paper_id": obj.id,
+#                 "question_id": question_id,
+#                 "question": question,
+#                 "response": response,
+#                 "reference": reference,
+#                 "scores": scores,
+#             })
 
 
 
@@ -385,8 +506,8 @@ class UploadedTestPaperAdmin(admin.ModelAdmin):
                 # 3. 空白回應自動評分
                 response = ""
                 reference = row["standard_answer"]
-                scores = score_response(row["question"], response, reference)
-
+                # scores = score_response(row["question"], response, reference)
+                scores = ""
                 # 4. 儲存評估紀錄
                 save_evaluation({
                     "exp_id": obj.name,
